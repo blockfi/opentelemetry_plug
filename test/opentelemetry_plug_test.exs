@@ -84,6 +84,20 @@ defmodule OpentelemetryPlugTest do
     assert status(code: :error, message: _) = span_status
   end
 
+  test "forwarding in plug routers preserves a single trace" do
+    assert {200, headers, "Hi, Admin!"} = request(:get, "/admin/hello")
+
+    assert_receive {:span, span(trace_id: trace_id_1, name: "/admin/*glob", attributes: attrs)}, 5000
+    assert_receive {:span, span(trace_id: trace_id_2, name: "/admin/*glob/hello", attributes: attrs)}, 5000
+
+    # Expected to be the same trace
+    assert trace_id_1 == trace_id_2
+
+    for attr <- @default_attrs do
+      assert List.keymember?(attrs, attr, 0)
+    end
+  end
+
   defp base_url do
     info = :ranch.info(MyRouter.HTTP)
     port = Keyword.fetch!(info, :port)
@@ -107,6 +121,20 @@ defmodule OpentelemetryPlugTest do
         error
     end
   end
+end
+
+defmodule AdminRouter do
+  use Plug.Router
+
+  plug :match
+  plug :dispatch
+
+  match "/hello" do
+    conn
+    |> put_resp_content_type("text/plain")
+    |> send_resp(200, "Hi, Admin!")
+  end
+
 end
 
 defmodule MyRouter do
@@ -140,4 +168,7 @@ defmodule MyRouter do
         |> send_resp(200, "Hello world")
     end
   end
+
+  forward "/admin", to: AdminRouter
+
 end
