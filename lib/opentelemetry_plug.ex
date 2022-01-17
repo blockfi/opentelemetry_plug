@@ -29,7 +29,10 @@ defmodule OpentelemetryPlug do
 
     @impl true
     def call(conn, _opts) do
-      register_before_send(conn, &merge_resp_headers(&1, OpentelemetryPlug.inject_header_context([])))
+      register_before_send(
+        conn,
+        &merge_resp_headers(&1, OpentelemetryPlug.inject_header_context([]))
+      )
     end
   end
 
@@ -155,7 +158,9 @@ defmodule OpentelemetryPlug do
     end
   end
 
-  defp http_target(conn) when conn.query_string == "" or is_nil(conn.query_string), do: conn.request_path
+  defp http_target(conn) when conn.query_string == "" or is_nil(conn.query_string),
+    do: conn.request_path
+
   defp http_target(conn), do: conn.request_path <> "?" <> conn.query_string
 
   defp optional_attributes(conn) do
