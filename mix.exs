@@ -24,9 +24,9 @@ defmodule OpentelemetryPlug.MixProject do
       {:hackney, "~> 1.0", only: :test, runtime: false},
       {:opentelemetry_api, "~> 1.0.0-rc"},
       {:opentelemetry, "~> 1.0.0-rc", only: :test},
-      {:plug, ">= 1.10.1"},
-      {:plug_cowboy, "~> 2.2", only: :test, runtime: false},
-      {:telemetry, "~> 0.4"}
+      {:plug, "~> 1.13"},
+      {:plug_cowboy, "~> 2.5.2", only: :test, runtime: false, override: true},
+      {:telemetry, "~> 1.0"}
     ]
   end
 end
