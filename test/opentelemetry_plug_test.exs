@@ -4,12 +4,15 @@ defmodule OpentelemetryPlugTest do
 
   Record.defrecord(:span, Record.extract(:span, from_lib: "opentelemetry/include/otel_span.hrl"))
 
-  for r <- [:event, :status] do
-    Record.defrecord(
-      r,
-      Record.extract(r, from_lib: "opentelemetry_api/include/opentelemetry.hrl")
-    )
-  end
+  Record.defrecord(
+    :event,
+    Record.extract(:event, from_lib: "opentelemetry/include/otel_span.hrl")
+  )
+
+  Record.defrecord(
+    :status,
+    Record.extract(:status, from_lib: "opentelemetry_api/include/opentelemetry.hrl")
+  )
 
   setup_all do
     OpentelemetryPlug.setup()
@@ -47,8 +50,10 @@ defmodule OpentelemetryPlugTest do
     assert List.keymember?(headers, "traceparent", 0)
     assert_receive {:span, span(name: "/hello/:foo", attributes: attrs)}, 5000
 
+    attr_map = :otel_attributes.map(attrs)
+
     for attr <- @default_attrs do
-      assert List.keymember?(attrs, attr, 0)
+      assert Map.has_key?(attr_map, attr)
     end
   end
 
@@ -60,27 +65,34 @@ defmodule OpentelemetryPlugTest do
 
     assert_receive {:span, span(attributes: attrs)}, 5000
 
-    assert List.keymember?(attrs, :"http.client_ip", 0)
-    assert List.keymember?(attrs, :"http.server_name", 0)
+    assert %{"http.client_ip": "1.1.1.1", "http.server_name": "example.com"} =
+             :otel_attributes.map(attrs)
   end
 
   test "records exceptions" do
     assert {500, _, _} = request(:get, "/hello/crash")
     assert_receive {:span, span(attributes: attrs, status: span_status, events: events)}, 5000
 
-    assert {:"http.status_code", 500} = List.keyfind(attrs, :"http.status_code", 0)
-    assert status(code: :error, message: _) = span_status
-    assert [event(name: "exception", attributes: evt_attrs)] = events
+    assert [event(name: "exception", attributes: event_attrs)] = :otel_events.list(events)
 
-    for key <- ~w(exception.type exception.message exception.stacktrace) do
-      assert List.keymember?(evt_attrs, key, 0)
-    end
+    assert %{
+             "exception.message" => "argument error",
+             "exception.stacktrace" => stack_trace,
+             "exception.type" => "Elixir.ArgumentError"
+           } = :otel_attributes.map(event_attrs)
+
+    assert stack_trace =~ "test/opentelemetry_plug_test.exs"
+
+    assert %{"http.status_code": 500} = :otel_attributes.map(attrs)
+
+    assert status(code: :error, message: "argument error") = span_status
   end
 
   test "sets span status on non-successful status codes" do
     assert {400, _, _} = request(:get, "/hello/bad-request")
     assert_receive {:span, span(attributes: attrs, status: span_status)}, 5000
-    assert {:"http.status_code", 400} = List.keyfind(attrs, :"http.status_code", 0)
+
+    assert %{"http.status_code": 400} = :otel_attributes.map(attrs)
     assert status(code: :error, message: _) = span_status
   end
 
